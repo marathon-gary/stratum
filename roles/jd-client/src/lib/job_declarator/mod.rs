@@ -241,6 +241,8 @@ impl JobDeclarator {
             let tx = Transaction::deserialize(&tx).unwrap();
             tx_list.push(tx);
         }
+        let (tx_short_hash_list, tx_hash_list_hash) =
+            hash_lists_tuple(tx_list.clone(), tx_short_hash_nonce);
         let declare_job = DeclareMiningJob {
             request_id: id,
             mining_job_token: token.try_into().unwrap(),
@@ -252,8 +254,8 @@ impl JobDeclarator {
                 .safe_lock(|s| s.coinbase_tx_suffix.clone())
                 .unwrap(),
             tx_short_hash_nonce,
-            tx_short_hash_list: hash_lists_tuple(tx_list.clone(), tx_short_hash_nonce).0,
-            tx_hash_list_hash: hash_lists_tuple(tx_list.clone(), tx_short_hash_nonce).1,
+            tx_short_hash_list,
+            tx_hash_list_hash,
             excess_data, // request transaction data
         };
         let last_declare = LastDeclareJob {
