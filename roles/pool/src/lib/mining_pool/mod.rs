@@ -66,6 +66,15 @@ pub struct CoinbaseOutput {
     output_script_value: String,
 }
 
+impl CoinbaseOutput {
+    pub fn new(output_script_type: String, output_script_value: String) -> Self {
+        Self {
+            output_script_type,
+            output_script_value,
+        }
+    }
+}
+
 impl TryFrom<&CoinbaseOutput> for CoinbaseOutput_ {
     type Error = Error;
 
@@ -94,6 +103,73 @@ pub struct Configuration {
     pub pool_signature: String,
     #[cfg(feature = "test_only_allow_unencrypted")]
     pub test_only_listen_adress_plain: String,
+}
+
+pub struct TemplateProviderConfig {
+    address: String,
+    authority_public_key: Option<Secp256k1PublicKey>,
+}
+
+impl TemplateProviderConfig {
+    pub fn new(address: String, authority_public_key: Option<Secp256k1PublicKey>) -> Self {
+        Self {
+            address,
+            authority_public_key,
+        }
+    }
+}
+
+pub struct AuthorityConfig {
+    pub public_key: Secp256k1PublicKey,
+    pub secret_key: Secp256k1SecretKey,
+}
+
+impl AuthorityConfig {
+    pub fn new(public_key: Secp256k1PublicKey, secret_key: Secp256k1SecretKey) -> Self {
+        Self {
+            public_key,
+            secret_key,
+        }
+    }
+}
+
+pub struct ConnectionConfig {
+    listen_address: String,
+    cert_validity_sec: u64,
+    signature: String,
+}
+
+impl ConnectionConfig {
+    pub fn new(listen_address: String, cert_validity_sec: u64, signature: String) -> Self {
+        Self {
+            listen_address,
+            cert_validity_sec,
+            signature,
+        }
+    }
+}
+
+impl Configuration {
+    pub fn new(
+        pool_connection: ConnectionConfig,
+        template_provider: TemplateProviderConfig,
+        authority_config: AuthorityConfig,
+        coinbase_outputs: Vec<CoinbaseOutput>,
+        #[cfg(feature = "test_only_allow_unencrypted")] test_only_listen_adress_plain: String,
+    ) -> Self {
+        Self {
+            listen_address: pool_connection.listen_address,
+            tp_address: template_provider.address,
+            tp_authority_public_key: template_provider.authority_public_key,
+            authority_public_key: authority_config.public_key,
+            authority_secret_key: authority_config.secret_key,
+            cert_validity_sec: pool_connection.cert_validity_sec,
+            coinbase_outputs,
+            pool_signature: pool_connection.signature,
+            #[cfg(feature = "test_only_allow_unencrypted")]
+            test_only_listen_adress_plain,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -657,23 +733,41 @@ impl Pool {
 #[cfg(test)]
 mod test {
     use binary_sv2::{B0255, B064K};
+    use ext_config::{Config, File, FileFormat};
     use std::convert::TryInto;
+    use tracing::error;
 
     use stratum_common::{
         bitcoin,
         bitcoin::{util::psbt::serialize::Serialize, Transaction, Witness},
     };
 
+    use super::Configuration;
+
     // this test is used to verify the `coinbase_tx_prefix` and `coinbase_tx_suffix` values tested against in
     // message generator `stratum/test/message-generator/test/pool-sri-test-extended.json`
     #[test]
     fn test_coinbase_outputs_from_config() {
+        let config_path = "./config-examples/pool-config-local-tp-example.toml";
+
         // Load config
-        let config: super::Configuration = toml::from_str(
-            &std::fs::read_to_string("./config-examples/pool-config-local-tp-example.toml")
-                .unwrap(),
-        )
-        .unwrap();
+        let config: Configuration = match Config::builder()
+            .add_source(File::new(&config_path, FileFormat::Toml))
+            .build()
+        {
+            Ok(settings) => match settings.try_deserialize::<Configuration>() {
+                Ok(c) => c,
+                Err(e) => {
+                    error!("Failed to deserialize config: {}", e);
+                    return;
+                }
+            },
+            Err(e) => {
+                error!("Failed to build config: {}", e);
+                return;
+            }
+        };
+
         // template from message generator test (mock TP template)
         let _extranonce_len = 3;
         let coinbase_prefix = vec![3, 76, 163, 38, 0];

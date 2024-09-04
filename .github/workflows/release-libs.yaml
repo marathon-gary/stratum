@@ -11,9 +11,12 @@
 name: Release Libs
 
 on:
-  pull_request:
-    branches:
-      - main
+  # Manually run by going to "Actions/Release" in Github and running the workflow
+  workflow_dispatch:
+  # every time a new release tag is created
+  push:
+    tags:
+      - "v*.*.*"
 
 jobs:
   libs_publish:
@@ -21,14 +24,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Run check-versioning-lib-release.sh
-        run: |
-          ./check-versioning-lib-release.sh
-          if [ $? -eq 1 ]; then
-            echo "Script returned exit code 1, halting the workflow"
-            exit 1
-          fi
 
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
@@ -146,29 +141,4 @@ jobs:
         continue-on-error: true
         run: |
           cd roles/roles-utils/rpc
-          cargo publish
-      - name: Publish crate jd_client
-        continue-on-error: true
-        run: |
-          cd roles/jd-client
-          cargo publish
-      - name: Publish crate jd_server
-        continue-on-error: true
-        run: |
-          cd roles/jd-server
-          cargo publish
-      - name: Publish crate mining_proxy_sv2
-        continue-on-error: true
-        run: |
-          cd roles/mining-proxy
-          cargo publish
-      - name: Publish crate pool_sv2
-        continue-on-error: true
-        run: |
-          cd roles/pool
-          cargo publish
-      - name: Publish crate translator_sv2
-        continue-on-error: true
-        run: |
-          cd roles/translator
           cargo publish
